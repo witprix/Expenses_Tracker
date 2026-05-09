@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vault Pro: Pure Metrics & Copy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .active-tab { background-color: white; color: #6366f1; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); }
+        .edit-glow { border: 2px solid #6366f1 !important; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+        .copy-toast { animation: fadeOut 2s forwards; }
+        @keyframes fadeOut { 0% { opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen pb-20">
+
+    <div class="sticky top-0 z-50 bg-indigo-600 p-4 shadow-lg md:px-10 flex justify-between items-center text-white">
+        <h1 class="font-black tracking-tighter text-xl text-white">VAULT PRO</h1>
+        <div id="date-display" class="text-xs font-bold opacity-80 uppercase tracking-widest">Utility & Travel Manager</div>
+    </div>
+
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-[100] pointer-events-none"></div>
+
+    <div class="max-w-6xl mx-auto p-4">
+        <div class="bg-slate-200 p-1 rounded-2xl flex mb-6 max-w-md mx-auto">
+            <button onclick="switchTab('utility')" id="tab-btn-utility" class="flex-1 py-3 rounded-xl font-bold transition-all active-tab">UTILITIES</button>
+            <button onclick="switchTab('travel')" id="tab-btn-travel" class="flex-1 py-3 rounded-xl font-bold transition-all text-slate-500">TRAVEL</button>
+        </div>
+
+        <div id="summary-grid" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8"></div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div class="lg:col-span-5 space-y-6">
+                <section id="pane-utility" class="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm transition-all">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-black text-indigo-600 uppercase text-xs">Utility Entry</h2>
+                        <div class="flex gap-3">
+                            <button onclick="handleExport('utility')" class="text-[10px] font-black text-slate-400 hover:text-indigo-600">EXPORT JSON</button>
+                            <button onclick="triggerImport('utility')" class="text-[10px] font-black text-slate-400 hover:text-indigo-600">IMPORT JSON</button>
+                        </div>
+                    </div>
+                    <form id="uForm" class="space-y-3">
+                        <input type="hidden" id="u-id">
+                        <select id="u-cat" onchange="toggleUFields()" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-indigo-500">
+                            <option value="Mobile">📱 Mobile</option>
+                            <option value="Electricity">⚡ Electricity</option>
+                            <option value="Petrol">⛽ Petrol</option>
+                            <option value="Gas">🔥 Gas</option>
+                            <option value="Broadband">🌐 Broadband</option>
+                        </select>
+                        <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        <div id="u-elec-group" class="hidden">
+                            <input type="number" id="u-units" placeholder="Units Consumed (kWh)" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        </div>
+                        <div id="u-fuel-group" class="hidden grid grid-cols-2 gap-2">
+                            <input type="number" id="u-liters" step="0.01" placeholder="Liters" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                            <input type="number" id="u-price" step="0.01" placeholder="₹/L" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="u-amt" required placeholder="Base ₹" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                            <input type="text" id="u-disc" placeholder="Disc (₹ or %)" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        </div>
+                        <input type="date" id="u-date" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        <button type="submit" id="u-btn" class="w-full py-4 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">SAVE BILL</button>
+                    </form>
+                </section>
+
+                <section id="pane-travel" class="hidden bg-white p-6 rounded-3xl border border-slate-200 shadow-sm transition-all">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="font-black text-emerald-600 uppercase text-xs">Travel Entry</h2>
+                        <div class="flex gap-3">
+                            <button onclick="handleExport('travel')" class="text-[10px] font-black text-slate-400 hover:text-emerald-600">EXPORT JSON</button>
+                            <button onclick="triggerImport('travel')" class="text-[10px] font-black text-slate-400 hover:text-emerald-600">IMPORT JSON</button>
+                        </div>
+                    </div>
+                    <form id="tForm" class="space-y-3">
+                        <input type="hidden" id="t-id">
+                        <select id="t-cat" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-emerald-500">
+                            <option value="Flight">✈️ Flight</option>
+                            <option value="Train">🚆 Train</option>
+                            <option value="Hotel">🏨 Hotel Stay</option>
+                            <option value="Taxi">🚕 Taxi / Uber</option>
+                            <option value="Food">🍴 Dining</option>
+                        </select>
+                        <input type="text" id="t-trip" placeholder="Trip Destination" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        <input type="text" id="t-ref" placeholder="PNR / Booking ID" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="number" id="t-amt" required placeholder="Amount ₹" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                            <input type="text" id="t-disc" placeholder="Disc (₹ or %)" class="p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        </div>
+                        <input type="date" id="t-date" class="w-full p-3 bg-slate-50 rounded-xl ring-1 ring-slate-200 outline-none">
+                        <button type="submit" id="t-btn" class="w-full py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100">SAVE TRAVEL</button>
+                    </form>
+                </section>
+            </div>
+
+            <div class="lg:col-span-7 space-y-6">
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-5 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+                        <h3 class="font-black text-[10px] uppercase tracking-widest text-slate-400" id="hist-title">Utility History</h3>
+                        <button onclick="clearCurrentData()" class="text-[10px] font-black text-red-400">CLEAR ALL RECORDS</button>
+                    </div>
+                    <div id="dataList" class="divide-y divide-slate-50 max-h-[600px] overflow-y-auto custom-scroll"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="import-file" class="hidden" accept=".json">
+
+    <script>
+        let uData = JSON.parse(localStorage.getItem('vPro_U')) || [];
+        let tData = JSON.parse(localStorage.getItem('vPro_T')) || [];
+        let activeTab = 'utility';
+        const uCats = ['Mobile', 'Electricity', 'Petrol', 'Gas', 'Broadband'];
+        const tCats = ['Flight', 'Train', 'Hotel', 'Taxi', 'Food'];
+
+        function switchTab(tab) {
+            activeTab = tab;
+            document.getElementById('pane-utility').classList.toggle('hidden', tab !== 'utility');
+            document.getElementById('pane-travel').classList.toggle('hidden', tab !== 'travel');
+            document.getElementById('tab-btn-utility').className = tab === 'utility' ? 'flex-1 py-3 rounded-xl font-bold transition-all active-tab' : 'flex-1 py-3 rounded-xl font-bold transition-all text-slate-500';
+            document.getElementById('tab-btn-travel').className = tab === 'travel' ? 'flex-1 py-3 rounded-xl font-bold transition-all active-tab' : 'flex-1 py-3 rounded-xl font-bold transition-all text-slate-500';
+            document.getElementById('hist-title').innerText = `${tab} History`;
+            render();
+        }
+
+        function toggleUFields() {
+            const cat = document.getElementById('u-cat').value;
+            document.getElementById('u-elec-group').classList.toggle('hidden', cat !== 'Electricity');
+            document.getElementById('u-fuel-group').classList.toggle('hidden', !['Petrol', 'Gas'].includes(cat));
+        }
+
+        function copyToClipboard(text) {
+            if (!text || text === 'NA') return;
+            navigator.clipboard.writeText(text).then(() => {
+                const toast = document.createElement('div');
+                toast.className = 'bg-slate-800 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl mb-2 copy-toast';
+                toast.innerText = `Copied: ${text}`;
+                document.getElementById('toast-container').appendChild(toast);
+                setTimeout(() => toast.remove(), 2000);
+            });
+        }
+
+        function getNet(base, dStr) {
+            let d = 0;
+            if (dStr && dStr.toString().includes('%')) d = (base * parseFloat(dStr)) / 100;
+            else d = parseFloat(dStr) || 0;
+            return { net: base - d, disc: d };
+        }
+
+        document.getElementById('uForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('u-id').value;
+            const base = parseFloat(document.getElementById('u-amt').value);
+            const {net, disc} = getNet(base, document.getElementById('u-disc').value);
+            const entry = { 
+                id: id ? parseInt(id) : Date.now(), 
+                cat: document.getElementById('u-cat').value, 
+                acc: document.getElementById('u-acc').value || 'NA', 
+                base, disc, net, 
+                date: document.getElementById('u-date').value, 
+                units: document.getElementById('u-units').value, 
+                liters: document.getElementById('u-liters').value 
+            };
+            if(id) uData = uData.map(x => x.id === entry.id ? entry : x);
+            else uData.push(entry);
+            saveToStorage('utility');
+            resetForm('u');
+        });
+
+        document.getElementById('tForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = document.getElementById('t-id').value;
+            const base = parseFloat(document.getElementById('t-amt').value);
+            const {net, disc} = getNet(base, document.getElementById('t-disc').value);
+            const entry = { 
+                id: id ? parseInt(id) : Date.now(), 
+                cat: document.getElementById('t-cat').value, 
+                trip: document.getElementById('t-trip').value, 
+                ref: document.getElementById('t-ref').value || 'NA', 
+                base, disc, net, 
+                date: document.getElementById('t-date').value 
+            };
+            if(id) tData = tData.map(x => x.id === entry.id ? entry : x);
+            else tData.push(entry);
+            saveToStorage('travel');
+            resetForm('t');
+        });
+
+        function saveToStorage(type) {
+            if(type === 'utility') localStorage.setItem('vPro_U', JSON.stringify(uData));
+            else localStorage.setItem('vPro_T', JSON.stringify(tData));
+            render();
+        }
+
+        function render() {
+            const list = document.getElementById('dataList');
+            const data = activeTab === 'utility' ? uData : tData;
+            renderSummary();
+            
+            list.innerHTML = data.slice().reverse().map(item => {
+                const copyVal = activeTab === 'utility' ? item.acc : item.ref;
+                const hasDiscount = item.disc > 0;
+
+                return `
+                <div class="p-4 flex justify-between items-center group hover:bg-slate-50 transition">
+                    <div class="flex items-center gap-3">
+                        <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg text-xs font-bold">${item.cat.substring(0,2).toUpperCase()}</div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-sm text-slate-800">${item.cat}</span>
+                                <div onclick="copyToClipboard('${copyVal}')" class="flex items-center gap-1 px-2 py-0.5 bg-slate-100 rounded text-[10px] text-slate-500 font-mono cursor-pointer hover:bg-indigo-100 hover:text-indigo-600 transition">
+                                    #${copyVal} 📋
+                                </div>
+                            </div>
+                            <div class="text-[10px] text-slate-400 mt-0.5">${item.date} ${item.trip ? '| '+item.trip : ''} ${item.units ? '| '+item.units+' kWh' : ''}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="text-right">
+                            ${hasDiscount ? `
+                                <div class="text-[10px] text-slate-400 line-through">₹${item.base.toLocaleString('en-IN')}</div>
+                                <div class="text-[9px] text-emerald-500 font-black uppercase tracking-tighter">- ₹${item.disc.toFixed(0)} SAVED</div>
+                            ` : ''}
+                            <div class="font-black text-indigo-600 text-lg leading-tight">₹${item.net.toLocaleString('en-IN')}</div>
+                        </div>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                            <button onclick="editItem(${item.id})" class="text-blue-500 text-[10px] font-black">EDIT</button>
+                            <button onclick="deleteItem(${item.id})" class="text-red-300 text-sm">✕</button>
+                        </div>
+                    </div>
+                </div>
+                `}).join('') || '<div class="p-20 text-center text-slate-300 font-bold text-xs uppercase">No Transactions</div>';
+        }
+
+        function renderSummary() {
+            const grid = document.getElementById('summary-grid');
+            const data = activeTab === 'utility' ? uData : tData;
+            const cats = activeTab === 'utility' ? uCats : tCats;
+            const now = new Date();
+            const currMonth = now.getMonth();
+            const currYear = now.getFullYear();
+
+            grid.innerHTML = cats.map(cat => {
+                const catEntries = data.filter(d => d.cat === cat);
+                const monthTotal = catEntries.filter(d => {
+                    const dt = new Date(d.date);
+                    return dt.getMonth() === currMonth && dt.getFullYear() === currYear;
+                }).reduce((s, c) => s + c.net, 0);
+                const yearTotal = catEntries.filter(d => new Date(d.date).getFullYear() === currYear).reduce((s, c) => s + c.net, 0);
+                
+                return `
+                <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div class="text-[10px] font-black text-slate-400 uppercase mb-2">${cat}</div>
+                    <div class="mb-1">
+                        <div class="text-[9px] text-slate-400 uppercase">Monthly</div>
+                        <div class="text-sm font-black text-indigo-600">₹${Math.round(monthTotal).toLocaleString('en-IN')}</div>
+                    </div>
+                    <div>
+                        <div class="text-[9px] text-slate-400 uppercase">Yearly</div>
+                        <div class="text-xs font-bold text-slate-700">₹${Math.round(yearTotal).toLocaleString('en-IN')}</div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+        }
+
+        function editItem(id) {
+            const data = activeTab === 'utility' ? uData : tData;
+            const item = data.find(x => x.id === id);
+            if(activeTab === 'utility') {
+                document.getElementById('u-id').value = item.id;
+                document.getElementById('u-cat').value = item.cat;
+                document.getElementById('u-acc').value = item.acc;
+                document.getElementById('u-amt').value = item.base;
+                document.getElementById('u-disc').value = item.disc;
+                document.getElementById('u-date').value = item.date;
+                document.getElementById('u-units').value = item.units || '';
+                document.getElementById('u-liters').value = item.liters || '';
+                document.getElementById('pane-utility').classList.add('edit-glow');
+                document.getElementById('u-btn').innerText = "UPDATE RECORD";
+                toggleUFields();
+            } else {
+                document.getElementById('t-id').value = item.id;
+                document.getElementById('t-cat').value = item.cat;
+                document.getElementById('t-trip').value = item.trip;
+                document.getElementById('t-ref').value = item.ref;
+                document.getElementById('t-amt').value = item.base;
+                document.getElementById('t-disc').value = item.disc;
+                document.getElementById('t-date').value = item.date;
+                document.getElementById('pane-travel').classList.add('edit-glow');
+                document.getElementById('t-btn').innerText = "UPDATE RECORD";
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteItem(id) {
+            if(!confirm('Delete permanently?')) return;
+            if(activeTab === 'utility') uData = uData.filter(x => x.id !== id);
+            else tData = tData.filter(x => x.id !== id);
+            saveToStorage(activeTab);
+        }
+
+        async function handleExport(type) {
+            const data = type === 'utility' ? uData : tData;
+            const customName = prompt("Filename to save:", `${type}_data.json`);
+            if (!customName) return;
+            const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = customName.endsWith('.json') ? customName : customName + '.json';
+            a.click();
+        }
+
+        function triggerImport(type) {
+            const input = document.getElementById('import-file');
+            input.onchange = (e) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (type === 'utility') uData = parsed;
+                        else tData = parsed;
+                        saveToStorage(type);
+                    } catch (err) { alert("Invalid File"); }
+                };
+                reader.readAsText(e.target.files[0]);
+            };
+            input.click();
+        }
+
+        function resetForm(prefix) {
+            document.getElementById(`${prefix}Form`).reset();
+            document.getElementById(`${prefix}-id`).value = '';
+            document.getElementById(`${prefix}-btn`).innerText = `SAVE ${prefix === 'u' ? 'BILL' : 'TRAVEL'}`;
+            document.getElementById(`pane-${prefix === 'u' ? 'utility' : 'travel'}`).classList.remove('edit-glow');
+            document.getElementById(`${prefix}-date`).valueAsDate = new Date();
+            if(prefix === 'u') toggleUFields();
+        }
+
+        function clearCurrentData() {
+            if(confirm('Wipe all data for this tab?')) {
+                if(activeTab === 'utility') uData = [];
+                else tData = [];
+                saveToStorage(activeTab);
+            }
+        }
+
+        // Init
+        document.getElementById('u-date').valueAsDate = new Date();
+        document.getElementById('t-date').valueAsDate = new Date();
+        render();
+    </script>
+</body>
+</html>
