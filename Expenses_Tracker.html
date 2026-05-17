@@ -53,14 +53,43 @@
                             <option value="Gas">🔥 Gas</option>
                             <option value="Broadband">🌐 Broadband</option>
                         </select>
+                        
                         <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
                         
                         <div id="u-elec-group" class="hidden space-y-3">
-                            <select id="u-city" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                            <select id="u-city" onchange="handleCityChange()" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm font-semibold">
                                 <option value="">Select City</option>
                                 <option value="Kadapa">Kadapa</option>
                                 <option value="Bangalore">Bangalore</option>
                             </select>
+
+                            <div id="u-blr-fields" class="hidden space-y-3 bg-zinc-50 p-3 rounded-2xl border border-zinc-200/60">
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                        <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">RR Number</label>
+                                        <input type="text" id="u-blr-rr" value="MSVNL31161" readonly class="w-full p-2 bg-zinc-200/60 rounded-lg border border-zinc-200 font-semibold text-zinc-600 outline-none cursor-not-allowed">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">MR Code</label>
+                                        <input type="text" id="u-blr-mr" value="1126130" readonly class="w-full p-2 bg-zinc-200/60 rounded-lg border border-zinc-200 font-semibold text-zinc-600 outline-none cursor-not-allowed">
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <div>
+                                        <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">Sanctioned Load</label>
+                                        <input type="text" id="u-blr-load" value="5 kW" readonly class="w-full p-2 bg-zinc-200/60 rounded-lg border border-zinc-200 font-semibold text-zinc-600 outline-none cursor-not-allowed">
+                                    </div>
+                                    <div>
+                                        <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">Fixed Charges</label>
+                                        <input type="text" id="u-blr-fixed" value="₹725" readonly class="w-full p-2 bg-zinc-200/60 rounded-lg border border-zinc-200 font-semibold text-zinc-600 outline-none cursor-not-allowed">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">GoK Subsidy (₹)</label>
+                                    <input type="number" id="u-blr-subsidy" step="0.01" placeholder="Enter Government Subsidy Amount" class="w-full p-2.5 bg-white rounded-xl border border-zinc-200 outline-none">
+                                </div>
+                            </div>
+
                             <input type="number" id="u-units" placeholder="Units Consumed (kWh)" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
                         </div>
 
@@ -148,7 +177,7 @@
         const uCats = ['Mobile', 'Electricity', 'Petrol', 'Gas', 'Broadband'];
         const tCats = ['Flight', 'Train', 'Bus', 'Hotel', 'Taxi', 'Food'];
 
-        // --- INDEXEDDB SETUP TO STORE REUSABLE FILE HANDLES ---
+        // --- INDEXEDDB MODULE FOR COLD EMBEDDED FILE ACCESS STORAGE ---
         function getDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open('VaultProDB', 1);
@@ -219,6 +248,31 @@
             const cat = document.getElementById('u-cat').value;
             document.getElementById('u-elec-group').classList.toggle('hidden', cat !== 'Electricity');
             document.getElementById('u-fuel-group').classList.toggle('hidden', !['Petrol', 'Gas'].includes(cat));
+            if(cat !== 'Electricity') {
+                document.getElementById('u-blr-fields').classList.add('hidden');
+            } else {
+                handleCityChange();
+            }
+        }
+
+        // --- SPECIFIC FIELD HOOK FOR POPULATING BANGALORE ACCOUNT ---
+        function handleCityChange() {
+            const cat = document.getElementById('u-cat').value;
+            const city = document.getElementById('u-city').value;
+            const blrPanel = document.getElementById('u-blr-fields');
+            const accField = document.getElementById('u-acc');
+
+            if (cat === 'Electricity' && city === 'Bangalore') {
+                blrPanel.classList.remove('hidden');
+                accField.value = "5899612"; // Auto-assign account value
+                accField.readOnly = true;
+                accField.classList.add('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
+            } else {
+                blrPanel.classList.add('hidden');
+                accField.readOnly = false;
+                accField.classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
+                if(!document.getElementById('u-id').value) accField.value = ""; 
+            }
         }
 
         function copyText(t) {
@@ -249,7 +303,28 @@
             else if(id) inv = uData.find(x => x.id == id)?.invoice;
 
             const {net, disc} = getNet(base, document.getElementById('u-disc').value);
-            const entry = { id: id ? parseInt(id) : Date.now(), cat: document.getElementById('u-cat').value, acc: document.getElementById('u-acc').value || 'NA', base, disc, net, date: document.getElementById('u-date').value, units: document.getElementById('u-units').value, liters: document.getElementById('u-liters').value, city: document.getElementById('u-city').value, invoice: inv };
+            
+            // Collect Bangalore supplemental items if active
+            const cat = document.getElementById('u-cat').value;
+            const city = document.getElementById('u-city').value;
+            let subsidy = null;
+            if (cat === 'Electricity' && city === 'Bangalore') {
+                subsidy = document.getElementById('u-blr-subsidy').value || 0;
+            }
+
+            const entry = { 
+                id: id ? parseInt(id) : Date.now(), 
+                cat: cat, 
+                acc: document.getElementById('u-acc').value || 'NA', 
+                base, disc, net, 
+                date: document.getElementById('u-date').value, 
+                units: document.getElementById('u-units').value, 
+                liters: document.getElementById('u-liters').value, 
+                city: city, 
+                subsidy: subsidy,
+                invoice: inv 
+            };
+            
             if(id) uData = uData.map(x => x.id === entry.id ? entry : x);
             else uData.push(entry);
             saveToStorage('utility');
@@ -277,7 +352,6 @@
             if(type === 'utility') localStorage.setItem('vPro_U', JSON.stringify(uData));
             else localStorage.setItem('vPro_T', JSON.stringify(tData));
             render();
-            // Automatically push additions or deletions to persistent backup file
             autoSyncFile(type);
         }
 
@@ -312,6 +386,7 @@
                                 <div onclick="copyText('${cVal}')" class="px-2 py-0.5 bg-zinc-100 rounded text-[9px] text-zinc-500 font-bold cursor-pointer">#${cVal}</div>
                             </div>
                             <div class="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider">${item.date} ${item.trip ? '• '+item.trip : ''}</div>
+                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy Recieved: ₹${item.subsidy}</div>` : ''}
                             ${item.invoice ? `<button onclick="viewFile('${item.invoice}')" class="mt-2 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-xl uppercase transition hover:bg-indigo-100">View Copy</button>` : ''}
                         </div>
                     </div>
@@ -369,9 +444,14 @@
                 document.getElementById('u-amt').value = i.base;
                 document.getElementById('u-disc').value = i.disc;
                 document.getElementById('u-date').value = i.date;
+                document.getElementById('u-units').value = i.units || '';
+                document.getElementById('u-liters').value = i.liters || '';
                 document.getElementById('u-city').value = i.city || '';
                 document.getElementById('pane-utility').classList.add('edit-glow');
                 toggleUFields();
+                if(i.city === 'Bangalore') {
+                    document.getElementById('u-blr-subsidy').value = i.subsidy || '';
+                }
             } else {
                 document.getElementById('t-id').value = i.id;
                 document.getElementById('t-cat').value = i.cat;
@@ -392,7 +472,6 @@
             saveToStorage(activeTab);
         }
 
-        // --- ENHANCED EXPORT ENGINE WITH DIRECT DISK BACKUP SYSTEM ---
         async function handleExport(type) {
             const data = type === 'utility' ? uData : tData;
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -400,18 +479,14 @@
 
             if ('showSaveFilePicker' in window) {
                 let handle = await getStoredHandle(`handle_${type}`);
-                
-                // If a past handle exists, test and prompt user validation
                 if (handle) {
                     const opts = { mode: 'readwrite' };
                     if ((await handle.queryPermission(opts)) !== 'granted') {
                         if ((await handle.requestPermission(opts)) !== 'granted') {
-                            handle = null; // Re-prompt to establish setup if access denied
+                            handle = null;
                         }
                     }
                 }
-
-                // Initial connection setup: Show system directory location dialog
                 if (!handle) {
                     try {
                         handle = await window.showSaveFilePicker({
@@ -427,8 +502,6 @@
                         console.error(err);
                     }
                 }
-
-                // Write update directly into the verified target container
                 if (handle) {
                     try {
                         const writable = await handle.createWritable();
@@ -437,12 +510,10 @@
                         showSimpleToast('BACKUP SYNCED LOCALLY');
                         return;
                     } catch (err) {
-                        console.warn("Direct handle file access failed. Re-prompting...", err);
+                        console.warn("Direct handle file access failed.", err);
                     }
                 }
             }
-
-            // Fallback Engine for unsupported environments
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
             a.download = defaultName;
@@ -451,7 +522,6 @@
             showSimpleToast('DOWNLOAD STARTED');
         }
 
-        // Background automatic updates loop 
         async function autoSyncFile(type) {
             if ('showSaveFilePicker' in window) {
                 const handle = await getStoredHandle(`handle_${type}`);
@@ -508,6 +578,11 @@
             document.getElementById(`${p}-id`).value = '';
             document.getElementById(`pane-${p === 'u' ? 'utility' : 'travel'}`).classList.remove('edit-glow');
             document.getElementById(`${p}-date`).valueAsDate = new Date();
+            if(p === 'u') {
+                document.getElementById('u-acc').readOnly = false;
+                document.getElementById('u-acc').classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
+                document.getElementById('u-blr-fields').classList.add('hidden');
+            }
         }
 
         function clearCurrentData() {
