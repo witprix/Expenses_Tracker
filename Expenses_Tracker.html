@@ -53,8 +53,25 @@
                             <option value="Gas">🔥 Gas</option>
                             <option value="Broadband">🌐 Broadband</option>
                         </select>
+
+                        <div class="bg-zinc-50 p-3 rounded-2xl border border-zinc-200/60 space-y-2">
+                            <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">Billing Period</label>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div>
+                                    <span class="text-[8px] font-bold text-zinc-400 block mb-1">FROM</span>
+                                    <input type="date" id="u-bill-from" class="w-full p-2 bg-white rounded-lg border border-zinc-200 outline-none text-xs">
+                                </div>
+                                <div>
+                                    <span class="text-[8px] font-bold text-zinc-400 block mb-1">TO</span>
+                                    <input type="date" id="u-bill-to" class="w-full p-2 bg-white rounded-lg border border-zinc-200 outline-none text-xs">
+                                </div>
+                            </div>
+                        </div>
                         
-                        <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                        <div>
+                            <label id="u-acc-label" class="hidden text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Account / Reference ID</label>
+                            <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                        </div>
                         
                         <div id="u-elec-group" class="hidden space-y-3">
                             <select id="u-city" onchange="handleCityChange()" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm font-semibold">
@@ -177,7 +194,6 @@
         const uCats = ['Mobile', 'Electricity', 'Petrol', 'Gas', 'Broadband'];
         const tCats = ['Flight', 'Train', 'Bus', 'Hotel', 'Taxi', 'Food'];
 
-        // --- INDEXEDDB MODULE FOR COLD EMBEDDED FILE ACCESS STORAGE ---
         function getDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open('VaultProDB', 1);
@@ -246,32 +262,93 @@
 
         function toggleUFields() {
             const cat = document.getElementById('u-cat').value;
+            const label = document.getElementById('u-acc-label');
+            const accField = document.getElementById('u-acc');
+
             document.getElementById('u-elec-group').classList.toggle('hidden', cat !== 'Electricity');
             document.getElementById('u-fuel-group').classList.toggle('hidden', !['Petrol', 'Gas'].includes(cat));
+            
+            // Handle context-aware text headers and settings
+            if (['Gas', 'Broadband'].includes(cat)) {
+                label.innerText = "Account ID";
+                label.classList.remove('hidden');
+                accField.placeholder = "Enter Account ID";
+                if(!document.getElementById('u-id').value) accField.value = "";
+            } else if (cat === 'Mobile') {
+                label.innerText = "Mobile Number";
+                label.classList.remove('hidden');
+                accField.placeholder = "Enter Mobile Number";
+                if(!document.getElementById('u-id').value) accField.value = "";
+            } else if (cat !== 'Electricity') {
+                label.classList.add('hidden');
+                accField.placeholder = "Account / Phone / Meter No";
+                if(!document.getElementById('u-id').value) accField.value = "";
+            }
+
             if(cat !== 'Electricity') {
                 document.getElementById('u-blr-fields').classList.add('hidden');
+                accField.readOnly = false;
+                accField.classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
             } else {
                 handleCityChange();
             }
         }
 
-        // --- SPECIFIC FIELD HOOK FOR POPULATING BANGALORE ACCOUNT ---
+        function calculateBlrBillingPeriod() {
+            const now = new Date();
+            let currentYear = now.getFullYear();
+            let currentMonth = now.getMonth();
+            
+            let fromYear = currentYear;
+            let fromMonth = currentMonth - 1;
+            
+            if (fromMonth < 0) {
+                fromMonth = 11;
+                fromYear = currentYear - 1;
+            }
+            
+            const pad = (n) => n.toString().padStart(2, '0');
+            const fromDateStr = `${fromYear}-${pad(fromMonth + 1)}-15`;
+            const toDateStr = `${currentYear}-${pad(currentMonth + 1)}-15`;
+            
+            document.getElementById('u-bill-from').value = fromDateStr;
+            document.getElementById('u-bill-to').value = toDateStr;
+        }
+
         function handleCityChange() {
             const cat = document.getElementById('u-cat').value;
             const city = document.getElementById('u-city').value;
             const blrPanel = document.getElementById('u-blr-fields');
             const accField = document.getElementById('u-acc');
+            const label = document.getElementById('u-acc-label');
 
             if (cat === 'Electricity' && city === 'Bangalore') {
+                label.innerText = "Account ID";
+                label.classList.remove('hidden');
                 blrPanel.classList.remove('hidden');
-                accField.value = "5899612"; // Auto-assign account value
+                accField.value = "5899612";
                 accField.readOnly = true;
                 accField.classList.add('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
+                
+                if(!document.getElementById('u-id').value) {
+                    calculateBlrBillingPeriod();
+                }
             } else {
                 blrPanel.classList.add('hidden');
                 accField.readOnly = false;
                 accField.classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
-                if(!document.getElementById('u-id').value) accField.value = ""; 
+                
+                if (cat === 'Electricity') {
+                    label.innerText = "Account ID";
+                    label.classList.remove('hidden');
+                    accField.placeholder = "Enter Account / Meter ID";
+                }
+                
+                if(!document.getElementById('u-id').value) {
+                    accField.value = "";
+                    document.getElementById('u-bill-from').value = "";
+                    document.getElementById('u-bill-to').value = "";
+                } 
             }
         }
 
@@ -304,7 +381,6 @@
 
             const {net, disc} = getNet(base, document.getElementById('u-disc').value);
             
-            // Collect Bangalore supplemental items if active
             const cat = document.getElementById('u-cat').value;
             const city = document.getElementById('u-city').value;
             let subsidy = null;
@@ -318,6 +394,8 @@
                 acc: document.getElementById('u-acc').value || 'NA', 
                 base, disc, net, 
                 date: document.getElementById('u-date').value, 
+                billFrom: document.getElementById('u-bill-from').value,
+                billTo: document.getElementById('u-bill-to').value,
                 units: document.getElementById('u-units').value, 
                 liters: document.getElementById('u-liters').value, 
                 city: city, 
@@ -376,6 +454,11 @@
             
             list.innerHTML = data.slice().reverse().map(item => {
                 const cVal = activeTab === 'utility' ? item.acc : item.ref;
+                let periodText = "";
+                if (activeTab === 'utility' && item.billFrom && item.billTo) {
+                    const fmt = (dStr) => dStr.split('-').reverse().join('/');
+                    periodText = ` &bull; Period: ${fmt(item.billFrom)} to ${fmt(item.billTo)}`;
+                }
                 return `
                 <div class="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center group hover:bg-zinc-50 transition gap-4">
                     <div class="flex items-center gap-3">
@@ -385,8 +468,8 @@
                                 <span class="font-bold text-sm text-zinc-900">${item.cat} ${item.city ? '<span class="text-indigo-600">('+item.city+')</span>' : ''}</span>
                                 <div onclick="copyText('${cVal}')" class="px-2 py-0.5 bg-zinc-100 rounded text-[9px] text-zinc-500 font-bold cursor-pointer">#${cVal}</div>
                             </div>
-                            <div class="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider">${item.date} ${item.trip ? '• '+item.trip : ''}</div>
-                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy Recieved: ₹${item.subsidy}</div>` : ''}
+                            <div class="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider">${item.date} ${item.trip ? '• '+item.trip : ''} ${periodText}</div>
+                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy Received: ₹${item.subsidy}</div>` : ''}
                             ${item.invoice ? `<button onclick="viewFile('${item.invoice}')" class="mt-2 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-xl uppercase transition hover:bg-indigo-100">View Copy</button>` : ''}
                         </div>
                     </div>
@@ -441,6 +524,8 @@
                 document.getElementById('u-id').value = i.id;
                 document.getElementById('u-cat').value = i.cat;
                 document.getElementById('u-acc').value = i.acc;
+                document.getElementById('u-bill-from').value = i.billFrom || '';
+                document.getElementById('u-bill-to').value = i.billTo || '';
                 document.getElementById('u-amt').value = i.base;
                 document.getElementById('u-disc').value = i.disc;
                 document.getElementById('u-date').value = i.date;
@@ -489,7 +574,7 @@
                 }
                 if (!handle) {
                     try {
-                        handle = await window.showSaveFilePicker({
+                        handle = await window.showShowSaveFilePicker({
                             suggestedName: defaultName,
                             types: [{
                                 description: 'JSON Database Backup File',
@@ -582,6 +667,7 @@
                 document.getElementById('u-acc').readOnly = false;
                 document.getElementById('u-acc').classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
                 document.getElementById('u-blr-fields').classList.add('hidden');
+                document.getElementById('u-acc-label').classList.add('hidden');
             }
         }
 
@@ -595,6 +681,7 @@
         initFilters();
         document.getElementById('u-date').valueAsDate = new Date();
         document.getElementById('t-date').valueAsDate = new Date();
+        toggleUFields(); // Set initial form headers accurately
         render();
     </script>
 </body>
