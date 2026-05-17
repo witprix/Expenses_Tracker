@@ -40,7 +40,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-black text-zinc-400 uppercase text-[10px] tracking-widest">Utility Entry</h2>
                         <div class="flex gap-3">
-                            <button onclick="handleManualExport('utility')" class="text-[10px] font-black text-indigo-600 hover:underline transition">EXPORT / SYNC</button>
+                            <button onclick="handleExport('utility')" class="text-[10px] font-black text-indigo-600 hover:underline transition">LINK FILE (EXPORT)</button>
                             <button onclick="triggerImport('utility')" class="text-[10px] font-black text-zinc-400 hover:text-indigo-600 transition">IMPORT</button>
                         </div>
                     </div>
@@ -54,7 +54,7 @@
                             <option value="Broadband">🌐 Broadband</option>
                         </select>
 
-                        <div class="bg-zinc-50 p-3 rounded-2xl border border-zinc-200/60 space-y-2">
+                        <div id="u-bill-group" class="bg-zinc-50 p-3 rounded-2xl border border-zinc-200/60 space-y-2">
                             <label class="text-[9px] font-black text-zinc-400 uppercase block px-1">Billing Period</label>
                             <div class="grid grid-cols-2 gap-2 text-xs">
                                 <div>
@@ -68,9 +68,21 @@
                             </div>
                         </div>
                         
-                        <div>
-                            <label id="u-acc-label" class="hidden text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Account ID</label>
+                        <div id="u-acc-group">
+                            <label id="u-acc-label" class="hidden text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Account / Reference ID</label>
                             <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                        </div>
+
+                        <div id="u-petrol-brand-group" class="hidden">
+                            <label class="text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Fuel Provider</label>
+                            <select id="u-fuel-brand" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none font-semibold text-sm">
+                                <option value="HP">HP</option>
+                                <option value="BPCL">BPCL</option>
+                                <option value="IOCL">IOCL</option>
+                                <option value="NAYARA">NAYARA</option>
+                                <option value="Shell">Shell</option>
+                                <option value="Jio-BP">Jio-BP</option>
+                            </select>
                         </div>
                         
                         <div id="u-elec-group" class="hidden space-y-3">
@@ -111,8 +123,8 @@
                         </div>
 
                         <div id="u-fuel-group" class="hidden grid grid-cols-2 gap-2">
-                            <input type="number" id="u-liters" step="0.01" placeholder="Liters" class="p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
-                            <input type="number" id="u-price" step="0.01" placeholder="₹/L" class="p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                            <input type="number" id="u-liters" step="0.01" oninput="calculatePetrolBase()" placeholder="Liters" class="p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
+                            <input type="number" id="u-price" step="0.01" oninput="calculatePetrolBase()" placeholder="₹/L" class="p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
                         </div>
 
                         <div class="grid grid-cols-2 gap-2">
@@ -132,7 +144,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-black text-zinc-400 uppercase text-[10px] tracking-widest">Travel Entry</h2>
                         <div class="flex gap-3">
-                            <button onclick="handleManualExport('travel')" class="text-[10px] font-black text-emerald-600 hover:underline transition">EXPORT / SYNC</button>
+                            <button onclick="handleExport('travel')" class="text-[10px] font-black text-emerald-600 hover:underline transition">LINK FILE (EXPORT)</button>
                             <button onclick="triggerImport('travel')" class="text-[10px] font-black text-zinc-400 hover:text-emerald-600 transition">IMPORT</button>
                         </div>
                     </div>
@@ -258,6 +270,14 @@
             render();
         }
 
+        function calculatePetrolBase() {
+            const liters = parseFloat(document.getElementById('u-liters').value) || 0;
+            const price = parseFloat(document.getElementById('u-price').value) || 0;
+            if (liters && price) {
+                document.getElementById('u-amt').value = (liters * price).toFixed(2);
+            }
+        }
+
         function toggleUFields() {
             const cat = document.getElementById('u-cat').value;
             const label = document.getElementById('u-acc-label');
@@ -265,7 +285,20 @@
 
             document.getElementById('u-elec-group').classList.toggle('hidden', cat !== 'Electricity');
             document.getElementById('u-fuel-group').classList.toggle('hidden', !['Petrol', 'Gas'].includes(cat));
+            document.getElementById('u-bill-group').classList.toggle('hidden', cat === 'Petrol');
+            document.getElementById('u-acc-group').classList.toggle('hidden', cat === 'Petrol');
+            document.getElementById('u-petrol-brand-group').classList.toggle('hidden', cat !== 'Petrol');
             
+            // Clear calculation fields when switching category on new entries to prevent leaks
+            if (!document.getElementById('u-id').value) {
+                document.getElementById('u-amt').value = "";
+                document.getElementById('u-liters').value = "";
+                document.getElementById('u-price').value = "";
+                document.getElementById('u-units').value = "";
+                document.getElementById('u-disc').value = "";
+                document.getElementById('u-file').value = "";
+            }
+
             if (['Gas', 'Broadband'].includes(cat)) {
                 label.innerText = "Account ID";
                 label.classList.remove('hidden');
@@ -276,7 +309,7 @@
                 label.classList.remove('hidden');
                 accField.placeholder = "Enter Mobile Number";
                 if(!document.getElementById('u-id').value) accField.value = "";
-            } else if (cat !== 'Electricity') {
+            } else if (cat !== 'Electricity' && cat !== 'Petrol') {
                 label.classList.add('hidden');
                 accField.placeholder = "Account / Phone / Meter No";
                 if(!document.getElementById('u-id').value) accField.value = "";
@@ -370,14 +403,31 @@
             const {net, disc} = getNet(base, document.getElementById('u-disc').value);
             const cat = document.getElementById('u-cat').value;
             const city = document.getElementById('u-city').value;
-            let subsidy = (cat === 'Electricity' && city === 'Bangalore') ? (document.getElementById('u-blr-subsidy').value || 0) : null;
+            
+            let accountVal = document.getElementById('u-acc').value || 'NA';
+            if (cat === 'Petrol') {
+                accountVal = document.getElementById('u-fuel-brand').value;
+            }
+
+            let subsidy = null;
+            if (cat === 'Electricity' && city === 'Bangalore') {
+                subsidy = document.getElementById('u-blr-subsidy').value || 0;
+            }
 
             const entry = { 
-                id: id ? parseInt(id) : Date.now(), cat, acc: document.getElementById('u-acc').value || 'NA', 
-                base, disc, net, date: document.getElementById('u-date').value, 
-                billFrom: document.getElementById('u-bill-from').value, billTo: document.getElementById('u-bill-to').value,
-                units: document.getElementById('u-units').value, liters: document.getElementById('u-liters').value, 
-                city, subsidy, invoice: inv 
+                id: id ? parseInt(id) : Date.now(), 
+                cat: cat, 
+                acc: accountVal, 
+                base, disc, net, 
+                date: document.getElementById('u-date').value, 
+                billFrom: cat === 'Petrol' ? "" : document.getElementById('u-bill-from').value,
+                billTo: cat === 'Petrol' ? "" : document.getElementById('u-bill-to').value,
+                units: document.getElementById('u-units').value, 
+                liters: document.getElementById('u-liters').value, 
+                price: document.getElementById('u-price').value,
+                city: city, 
+                subsidy: subsidy,
+                invoice: inv 
             };
             
             if(id) uData = uData.map(x => x.id === entry.id ? entry : x);
@@ -408,117 +458,6 @@
             else localStorage.setItem('vPro_T', JSON.stringify(tData));
             render();
             autoSyncFile(type);
-        }
-
-        // --- INTELLIGENT DEEP MERGE STRATEGY Engine ---
-        function mergeDatasets(localData, diskData) {
-            const mergedMap = new Map();
-            // Process old/existing backup data profile configurations first
-            if (Array.isArray(diskData)) {
-                diskData.forEach(item => { if(item && item.id) mergedMap.set(item.id, item); });
-            }
-            // Process current layout runtime mutations. Overwrites or appends perfectly.
-            localData.forEach(item => {
-                if(item && item.id) {
-                    if (mergedMap.has(item.id)) {
-                        const existing = mergedMap.get(item.id);
-                        // Prevent loss of attachments if the runtime entity dropped reference
-                        if (!item.invoice && existing.invoice) {
-                            item.invoice = existing.invoice;
-                        }
-                    }
-                    mergedMap.set(item.id, item);
-                }
-            });
-            return Array.from(mergedMap.values()).sort((a,b) => a.id - b.id);
-        }
-
-        // Core Pipeline for targeted execution paths
-        async function handleManualExport(type) {
-            let handle = await getStoredHandle(`handle_${type}`);
-            const defaultName = `vault_${type}_backup.json`;
-            
-            if ('showSaveFilePicker' in window) {
-                if (!handle) {
-                    try {
-                        handle = await window.showSaveFilePicker({
-                            suggestedName: defaultName,
-                            types: [{ description: 'JSON Database Backup File', accept: { 'application/json': ['.json'] } }],
-                        });
-                        await storeHandle(`handle_${type}`, handle);
-                    } catch (err) {
-                        if (err.name === 'AbortError') return;
-                    }
-                }
-                
-                if (handle) {
-                    try {
-                        const opts = { mode: 'readwrite' };
-                        if ((await handle.queryPermission(opts)) !== 'granted') {
-                            if ((await handle.requestPermission(opts)) !== 'granted') return;
-                        }
-                        
-                        // Read and parse disk data safely prior to merging
-                        let diskData = [];
-                        try {
-                            const file = await handle.getFile();
-                            const contents = await file.text();
-                            if(contents.trim()) diskData = JSON.parse(contents);
-                        } catch(e) { console.warn("Could not parse existing target file layers. Initializing clean rewrite."); }
-
-                        const localData = type === 'utility' ? uData : tData;
-                        const finalMergedDataset = mergeDatasets(localData, diskData);
-                        
-                        // Sync localized instance state matching deep layout checks
-                        if(type === 'utility') { uData = finalMergedDataset; localStorage.setItem('vPro_U', JSON.stringify(uData)); }
-                        else { tData = finalMergedDataset; localStorage.setItem('vPro_T', JSON.stringify(tData)); }
-                        render();
-
-                        const blob = new Blob([JSON.stringify(finalMergedDataset, null, 2)], { type: 'application/json' });
-                        const writable = await handle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                        showSimpleToast('DATA DUPLICATE-CHECKED & SYNCED');
-                        return;
-                    } catch (err) {
-                        console.error("Direct storage pipeline faulted, falling back.", err);
-                    }
-                }
-            }
-            
-            // Legacy standard download implementation fallback paths
-            const fallbackData = type === 'utility' ? uData : tData;
-            const blob = new Blob([JSON.stringify(fallbackData, null, 2)], { type: 'application/json' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = defaultName;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showSimpleToast('DOWNLOAD STARTED');
-        }
-
-        async function autoSyncFile(type) {
-            if ('showSaveFilePicker' in window) {
-                const handle = await getStoredHandle(`handle_${type}`);
-                if (handle && (await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
-                    try {
-                        let diskData = [];
-                        try {
-                            const file = await handle.getFile();
-                            const contents = await file.text();
-                            if(contents.trim()) diskData = JSON.parse(contents);
-                        } catch(e){}
-
-                        const localData = type === 'utility' ? uData : tData;
-                        const finalMergedDataset = mergeDatasets(localData, diskData);
-
-                        const blob = new Blob([JSON.stringify(finalMergedDataset, null, 2)], { type: 'application/json' });
-                        const writable = await handle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                    } catch (e) { console.error("Auto backup sync failed", e); }
-                }
-            }
         }
 
         function viewFile(d) {
@@ -557,7 +496,7 @@
                                 <div onclick="copyText('${cVal}')" class="px-2 py-0.5 bg-zinc-100 rounded text-[9px] text-zinc-500 font-bold cursor-pointer">#${cVal}</div>
                             </div>
                             <div class="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider">${item.date} ${item.trip ? '• '+item.trip : ''} ${periodText}</div>
-                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy: ₹${item.subsidy}</div>` : ''}
+                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy Received: ₹${item.subsidy}</div>` : ''}
                             ${item.invoice ? `<button onclick="viewFile('${item.invoice}')" class="mt-2 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-xl uppercase transition hover:bg-indigo-100">View Copy</button>` : ''}
                         </div>
                     </div>
@@ -611,7 +550,13 @@
             if(activeTab === 'utility') {
                 document.getElementById('u-id').value = i.id;
                 document.getElementById('u-cat').value = i.cat;
-                document.getElementById('u-acc').value = i.acc;
+                toggleUFields(); // Set structural visibilities first
+                
+                if(i.cat === 'Petrol') {
+                    document.getElementById('u-fuel-brand').value = i.acc;
+                } else {
+                    document.getElementById('u-acc').value = i.acc;
+                }
                 document.getElementById('u-bill-from').value = i.billFrom || '';
                 document.getElementById('u-bill-to').value = i.billTo || '';
                 document.getElementById('u-amt').value = i.base;
@@ -619,10 +564,13 @@
                 document.getElementById('u-date').value = i.date;
                 document.getElementById('u-units').value = i.units || '';
                 document.getElementById('u-liters').value = i.liters || '';
+                document.getElementById('u-price').value = i.price || '';
                 document.getElementById('u-city').value = i.city || '';
                 document.getElementById('pane-utility').classList.add('edit-glow');
-                toggleUFields();
-                if(i.city === 'Bangalore') document.getElementById('u-blr-subsidy').value = i.subsidy || '';
+                
+                if(i.city === 'Bangalore') {
+                    document.getElementById('u-blr-subsidy').value = i.subsidy || '';
+                }
             } else {
                 document.getElementById('t-id').value = i.id;
                 document.getElementById('t-cat').value = i.cat;
@@ -641,6 +589,100 @@
             if(activeTab === 'utility') uData = uData.filter(x => x.id !== id);
             else tData = tData.filter(x => x.id !== id);
             saveToStorage(activeTab);
+        }
+
+        async function handleExport(type) {
+            let localData = type === 'utility' ? uData : tData;
+            const defaultName = `vault_${type}_backup.json`;
+
+            if ('showSaveFilePicker' in window) {
+                let handle = await getStoredHandle(`handle_${type}`);
+                if (handle) {
+                    const opts = { mode: 'readwrite' };
+                    if ((await handle.queryPermission(opts)) !== 'granted') {
+                        if ((await handle.requestPermission(opts)) !== 'granted') {
+                            handle = null;
+                        }
+                    }
+                }
+                if (!handle) {
+                    try {
+                        handle = await window.showSaveFilePicker({
+                            suggestedName: defaultName,
+                            types: [{
+                                description: 'JSON Database Backup File',
+                                accept: { 'application/json': ['.json'] },
+                            }],
+                        });
+                        await storeHandle(`handle_${type}`, handle);
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                        console.error(err);
+                    }
+                }
+                if (handle) {
+                    try {
+                        let fileData = [];
+                        try {
+                            const file = await handle.getFile();
+                            const text = await file.text();
+                            if (text) fileData = JSON.parse(text);
+                        } catch (e) { console.log("New file connection verified."); }
+
+                        const mergedMap = new Map();
+                        fileData.forEach(item => mergedMap.set(item.id, item));
+                        localData.forEach(item => mergedMap.set(item.id, item));
+                        const finalData = Array.from(mergedMap.values());
+
+                        if (type === 'utility') uData = finalData; else tData = finalData;
+                        localStorage.setItem(type === 'utility' ? 'vPro_U' : 'vPro_T', JSON.stringify(finalData));
+                        render();
+
+                        const blob = new Blob([JSON.stringify(finalData, null, 2)], { type: 'application/json' });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        showSimpleToast('BACKUP MERGED & SYNCED LOCALLY');
+                        return;
+                    } catch (err) {
+                        console.warn("Handle pipeline exception.", err);
+                    }
+                }
+            }
+            const blob = new Blob([JSON.stringify(localData, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = defaultName;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showSimpleToast('DOWNLOAD STARTED');
+        }
+
+        async function autoSyncFile(type) {
+            if ('showSaveFilePicker' in window) {
+                const handle = await getStoredHandle(`handle_${type}`);
+                if (handle && (await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
+                    try {
+                        let localData = type === 'utility' ? uData : tData;
+                        let fileData = [];
+                        try {
+                            const file = await handle.getFile();
+                            const text = await file.text();
+                            if (text) fileData = JSON.parse(text);
+                        } catch(e){}
+                        
+                        const mergedMap = new Map();
+                        fileData.forEach(item => mergedMap.set(item.id, item));
+                        localData.forEach(item => mergedMap.set(item.id, item));
+                        const finalData = Array.from(mergedMap.values());
+                        
+                        const blob = new Blob([JSON.stringify(finalData, null, 2)], { type: 'application/json' });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } catch (e) { console.error("Auto backup update paused", e); }
+                }
+            }
         }
 
         function showSimpleToast(msg) {
@@ -663,8 +705,13 @@
             reader.onload = (ev) => {
                 try {
                     const parsed = JSON.parse(ev.target.result);
-                    if (type === 'utility') { uData = parsed; localStorage.setItem('vPro_U', JSON.stringify(uData)); }
-                    else { tData = parsed; localStorage.setItem('vPro_T', JSON.stringify(tData)); }
+                    if (type === 'utility') {
+                        uData = parsed;
+                        localStorage.setItem('vPro_U', JSON.stringify(uData));
+                    } else {
+                        tData = parsed;
+                        localStorage.setItem('vPro_T', JSON.stringify(tData));
+                    }
                     render();
                     showSimpleToast('DATA IMPORTED');
                 } catch(e) { alert('Invalid file format'); }
@@ -682,6 +729,7 @@
                 document.getElementById('u-acc').classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
                 document.getElementById('u-blr-fields').classList.add('hidden');
                 document.getElementById('u-acc-label').classList.add('hidden');
+                toggleUFields();
             }
         }
 
