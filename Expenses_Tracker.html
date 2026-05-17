@@ -40,7 +40,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-black text-zinc-400 uppercase text-[10px] tracking-widest">Utility Entry</h2>
                         <div class="flex gap-3">
-                            <button onclick="handleExport('utility')" class="text-[10px] font-black text-zinc-400 hover:text-indigo-600 transition">EXPORT</button>
+                            <button onclick="handleManualExport('utility')" class="text-[10px] font-black text-indigo-600 hover:underline transition">EXPORT / SYNC</button>
                             <button onclick="triggerImport('utility')" class="text-[10px] font-black text-zinc-400 hover:text-indigo-600 transition">IMPORT</button>
                         </div>
                     </div>
@@ -69,7 +69,7 @@
                         </div>
                         
                         <div>
-                            <label id="u-acc-label" class="hidden text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Account / Reference ID</label>
+                            <label id="u-acc-label" class="hidden text-[9px] font-black text-zinc-400 uppercase block px-1 mb-1">Account ID</label>
                             <input type="text" id="u-acc" placeholder="Account / Phone / Meter No" class="w-full p-3 bg-zinc-50 rounded-xl border border-zinc-200 outline-none text-sm">
                         </div>
                         
@@ -132,7 +132,7 @@
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="font-black text-zinc-400 uppercase text-[10px] tracking-widest">Travel Entry</h2>
                         <div class="flex gap-3">
-                            <button onclick="handleExport('travel')" class="text-[10px] font-black text-zinc-400 hover:text-emerald-600 transition">EXPORT</button>
+                            <button onclick="handleManualExport('travel')" class="text-[10px] font-black text-emerald-600 hover:underline transition">EXPORT / SYNC</button>
                             <button onclick="triggerImport('travel')" class="text-[10px] font-black text-zinc-400 hover:text-emerald-600 transition">IMPORT</button>
                         </div>
                     </div>
@@ -197,9 +197,7 @@
         function getDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open('VaultProDB', 1);
-                request.onupgradeneeded = (e) => {
-                    e.target.result.createObjectStore('handles');
-                };
+                request.onupgradeneeded = (e) => { e.target.result.createObjectStore('handles'); };
                 request.onsuccess = (e) => resolve(e.target.result);
                 request.onerror = (e) => reject(e.target.error);
             });
@@ -268,7 +266,6 @@
             document.getElementById('u-elec-group').classList.toggle('hidden', cat !== 'Electricity');
             document.getElementById('u-fuel-group').classList.toggle('hidden', !['Petrol', 'Gas'].includes(cat));
             
-            // Handle context-aware text headers and settings
             if (['Gas', 'Broadband'].includes(cat)) {
                 label.innerText = "Account ID";
                 label.classList.remove('hidden');
@@ -298,7 +295,6 @@
             const now = new Date();
             let currentYear = now.getFullYear();
             let currentMonth = now.getMonth();
-            
             let fromYear = currentYear;
             let fromMonth = currentMonth - 1;
             
@@ -308,11 +304,8 @@
             }
             
             const pad = (n) => n.toString().padStart(2, '0');
-            const fromDateStr = `${fromYear}-${pad(fromMonth + 1)}-15`;
-            const toDateStr = `${currentYear}-${pad(currentMonth + 1)}-15`;
-            
-            document.getElementById('u-bill-from').value = fromDateStr;
-            document.getElementById('u-bill-to').value = toDateStr;
+            document.getElementById('u-bill-from').value = `${fromYear}-${pad(fromMonth + 1)}-15`;
+            document.getElementById('u-bill-to').value = `${currentYear}-${pad(currentMonth + 1)}-15`;
         }
 
         function handleCityChange() {
@@ -329,21 +322,16 @@
                 accField.value = "5899612";
                 accField.readOnly = true;
                 accField.classList.add('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
-                
-                if(!document.getElementById('u-id').value) {
-                    calculateBlrBillingPeriod();
-                }
+                if(!document.getElementById('u-id').value) calculateBlrBillingPeriod();
             } else {
                 blrPanel.classList.add('hidden');
                 accField.readOnly = false;
                 accField.classList.remove('bg-zinc-200/60', 'text-zinc-600', 'cursor-not-allowed', 'font-semibold');
-                
                 if (cat === 'Electricity') {
                     label.innerText = "Account ID";
                     label.classList.remove('hidden');
                     accField.placeholder = "Enter Account / Meter ID";
                 }
-                
                 if(!document.getElementById('u-id').value) {
                     accField.value = "";
                     document.getElementById('u-bill-from').value = "";
@@ -380,27 +368,16 @@
             else if(id) inv = uData.find(x => x.id == id)?.invoice;
 
             const {net, disc} = getNet(base, document.getElementById('u-disc').value);
-            
             const cat = document.getElementById('u-cat').value;
             const city = document.getElementById('u-city').value;
-            let subsidy = null;
-            if (cat === 'Electricity' && city === 'Bangalore') {
-                subsidy = document.getElementById('u-blr-subsidy').value || 0;
-            }
+            let subsidy = (cat === 'Electricity' && city === 'Bangalore') ? (document.getElementById('u-blr-subsidy').value || 0) : null;
 
             const entry = { 
-                id: id ? parseInt(id) : Date.now(), 
-                cat: cat, 
-                acc: document.getElementById('u-acc').value || 'NA', 
-                base, disc, net, 
-                date: document.getElementById('u-date').value, 
-                billFrom: document.getElementById('u-bill-from').value,
-                billTo: document.getElementById('u-bill-to').value,
-                units: document.getElementById('u-units').value, 
-                liters: document.getElementById('u-liters').value, 
-                city: city, 
-                subsidy: subsidy,
-                invoice: inv 
+                id: id ? parseInt(id) : Date.now(), cat, acc: document.getElementById('u-acc').value || 'NA', 
+                base, disc, net, date: document.getElementById('u-date').value, 
+                billFrom: document.getElementById('u-bill-from').value, billTo: document.getElementById('u-bill-to').value,
+                units: document.getElementById('u-units').value, liters: document.getElementById('u-liters').value, 
+                city, subsidy, invoice: inv 
             };
             
             if(id) uData = uData.map(x => x.id === entry.id ? entry : x);
@@ -431,6 +408,117 @@
             else localStorage.setItem('vPro_T', JSON.stringify(tData));
             render();
             autoSyncFile(type);
+        }
+
+        // --- INTELLIGENT DEEP MERGE STRATEGY Engine ---
+        function mergeDatasets(localData, diskData) {
+            const mergedMap = new Map();
+            // Process old/existing backup data profile configurations first
+            if (Array.isArray(diskData)) {
+                diskData.forEach(item => { if(item && item.id) mergedMap.set(item.id, item); });
+            }
+            // Process current layout runtime mutations. Overwrites or appends perfectly.
+            localData.forEach(item => {
+                if(item && item.id) {
+                    if (mergedMap.has(item.id)) {
+                        const existing = mergedMap.get(item.id);
+                        // Prevent loss of attachments if the runtime entity dropped reference
+                        if (!item.invoice && existing.invoice) {
+                            item.invoice = existing.invoice;
+                        }
+                    }
+                    mergedMap.set(item.id, item);
+                }
+            });
+            return Array.from(mergedMap.values()).sort((a,b) => a.id - b.id);
+        }
+
+        // Core Pipeline for targeted execution paths
+        async function handleManualExport(type) {
+            let handle = await getStoredHandle(`handle_${type}`);
+            const defaultName = `vault_${type}_backup.json`;
+            
+            if ('showSaveFilePicker' in window) {
+                if (!handle) {
+                    try {
+                        handle = await window.showSaveFilePicker({
+                            suggestedName: defaultName,
+                            types: [{ description: 'JSON Database Backup File', accept: { 'application/json': ['.json'] } }],
+                        });
+                        await storeHandle(`handle_${type}`, handle);
+                    } catch (err) {
+                        if (err.name === 'AbortError') return;
+                    }
+                }
+                
+                if (handle) {
+                    try {
+                        const opts = { mode: 'readwrite' };
+                        if ((await handle.queryPermission(opts)) !== 'granted') {
+                            if ((await handle.requestPermission(opts)) !== 'granted') return;
+                        }
+                        
+                        // Read and parse disk data safely prior to merging
+                        let diskData = [];
+                        try {
+                            const file = await handle.getFile();
+                            const contents = await file.text();
+                            if(contents.trim()) diskData = JSON.parse(contents);
+                        } catch(e) { console.warn("Could not parse existing target file layers. Initializing clean rewrite."); }
+
+                        const localData = type === 'utility' ? uData : tData;
+                        const finalMergedDataset = mergeDatasets(localData, diskData);
+                        
+                        // Sync localized instance state matching deep layout checks
+                        if(type === 'utility') { uData = finalMergedDataset; localStorage.setItem('vPro_U', JSON.stringify(uData)); }
+                        else { tData = finalMergedDataset; localStorage.setItem('vPro_T', JSON.stringify(tData)); }
+                        render();
+
+                        const blob = new Blob([JSON.stringify(finalMergedDataset, null, 2)], { type: 'application/json' });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                        showSimpleToast('DATA DUPLICATE-CHECKED & SYNCED');
+                        return;
+                    } catch (err) {
+                        console.error("Direct storage pipeline faulted, falling back.", err);
+                    }
+                }
+            }
+            
+            // Legacy standard download implementation fallback paths
+            const fallbackData = type === 'utility' ? uData : tData;
+            const blob = new Blob([JSON.stringify(fallbackData, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = defaultName;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            showSimpleToast('DOWNLOAD STARTED');
+        }
+
+        async function autoSyncFile(type) {
+            if ('showSaveFilePicker' in window) {
+                const handle = await getStoredHandle(`handle_${type}`);
+                if (handle && (await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
+                    try {
+                        let diskData = [];
+                        try {
+                            const file = await handle.getFile();
+                            const contents = await file.text();
+                            if(contents.trim()) diskData = JSON.parse(contents);
+                        } catch(e){}
+
+                        const localData = type === 'utility' ? uData : tData;
+                        const finalMergedDataset = mergeDatasets(localData, diskData);
+
+                        const blob = new Blob([JSON.stringify(finalMergedDataset, null, 2)], { type: 'application/json' });
+                        const writable = await handle.createWritable();
+                        await writable.write(blob);
+                        await writable.close();
+                    } catch (e) { console.error("Auto backup sync failed", e); }
+                }
+            }
         }
 
         function viewFile(d) {
@@ -469,7 +557,7 @@
                                 <div onclick="copyText('${cVal}')" class="px-2 py-0.5 bg-zinc-100 rounded text-[9px] text-zinc-500 font-bold cursor-pointer">#${cVal}</div>
                             </div>
                             <div class="text-[10px] text-zinc-400 font-bold mt-0.5 uppercase tracking-wider">${item.date} ${item.trip ? '• '+item.trip : ''} ${periodText}</div>
-                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy Received: ₹${item.subsidy}</div>` : ''}
+                            ${item.subsidy ? `<div class="text-[9px] text-indigo-500 font-bold mt-0.5">Subsidy: ₹${item.subsidy}</div>` : ''}
                             ${item.invoice ? `<button onclick="viewFile('${item.invoice}')" class="mt-2 text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-xl uppercase transition hover:bg-indigo-100">View Copy</button>` : ''}
                         </div>
                     </div>
@@ -534,9 +622,7 @@
                 document.getElementById('u-city').value = i.city || '';
                 document.getElementById('pane-utility').classList.add('edit-glow');
                 toggleUFields();
-                if(i.city === 'Bangalore') {
-                    document.getElementById('u-blr-subsidy').value = i.subsidy || '';
-                }
+                if(i.city === 'Bangalore') document.getElementById('u-blr-subsidy').value = i.subsidy || '';
             } else {
                 document.getElementById('t-id').value = i.id;
                 document.getElementById('t-cat').value = i.cat;
@@ -555,71 +641,6 @@
             if(activeTab === 'utility') uData = uData.filter(x => x.id !== id);
             else tData = tData.filter(x => x.id !== id);
             saveToStorage(activeTab);
-        }
-
-        async function handleExport(type) {
-            const data = type === 'utility' ? uData : tData;
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const defaultName = `vault_${type}_backup.json`;
-
-            if ('showSaveFilePicker' in window) {
-                let handle = await getStoredHandle(`handle_${type}`);
-                if (handle) {
-                    const opts = { mode: 'readwrite' };
-                    if ((await handle.queryPermission(opts)) !== 'granted') {
-                        if ((await handle.requestPermission(opts)) !== 'granted') {
-                            handle = null;
-                        }
-                    }
-                }
-                if (!handle) {
-                    try {
-                        handle = await window.showShowSaveFilePicker({
-                            suggestedName: defaultName,
-                            types: [{
-                                description: 'JSON Database Backup File',
-                                accept: { 'application/json': ['.json'] },
-                            }],
-                        });
-                        await storeHandle(`handle_${type}`, handle);
-                    } catch (err) {
-                        if (err.name === 'AbortError') return;
-                        console.error(err);
-                    }
-                }
-                if (handle) {
-                    try {
-                        const writable = await handle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                        showSimpleToast('BACKUP SYNCED LOCALLY');
-                        return;
-                    } catch (err) {
-                        console.warn("Direct handle file access failed.", err);
-                    }
-                }
-            }
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = defaultName;
-            a.click();
-            URL.revokeObjectURL(a.href);
-            showSimpleToast('DOWNLOAD STARTED');
-        }
-
-        async function autoSyncFile(type) {
-            if ('showSaveFilePicker' in window) {
-                const handle = await getStoredHandle(`handle_${type}`);
-                if (handle && (await handle.queryPermission({ mode: 'readwrite' })) === 'granted') {
-                    try {
-                        const data = type === 'utility' ? uData : tData;
-                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                        const writable = await handle.createWritable();
-                        await writable.write(blob);
-                        await writable.close();
-                    } catch (e) { console.error("Auto backup sync failed", e); }
-                }
-            }
         }
 
         function showSimpleToast(msg) {
@@ -642,18 +663,11 @@
             reader.onload = (ev) => {
                 try {
                     const parsed = JSON.parse(ev.target.result);
-                    if (type === 'utility') {
-                        uData = parsed;
-                        localStorage.setItem('vPro_U', JSON.stringify(uData));
-                    } else {
-                        tData = parsed;
-                        localStorage.setItem('vPro_T', JSON.stringify(tData));
-                    }
+                    if (type === 'utility') { uData = parsed; localStorage.setItem('vPro_U', JSON.stringify(uData)); }
+                    else { tData = parsed; localStorage.setItem('vPro_T', JSON.stringify(tData)); }
                     render();
                     showSimpleToast('DATA IMPORTED');
-                } catch(e) {
-                    alert('Invalid file format');
-                }
+                } catch(e) { alert('Invalid file format'); }
             };
             reader.readAsText(e.target.files[0]);
         };
@@ -681,7 +695,7 @@
         initFilters();
         document.getElementById('u-date').valueAsDate = new Date();
         document.getElementById('t-date').valueAsDate = new Date();
-        toggleUFields(); // Set initial form headers accurately
+        toggleUFields();
         render();
     </script>
 </body>
